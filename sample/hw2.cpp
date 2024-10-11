@@ -204,8 +204,7 @@ int main(int argc, char** argv) {
 
         // Fill the sendcounts and displs arrays
         for (int i = 0; i < size; ++i) {
-            int rows_for_proc = (i == size - 1) ? rows_per_process + height % size : rows_per_process;
-            sendcounts[i] = rows_for_proc * width * 4;  // Number of bytes to receive from each process
+            sendcounts[i] = rows_per_process * width * 4;  // Number of bytes to receive from each process
             displs[i] = i * rows_per_process * width * 4;  // Displacement in the final image
         }
     }
