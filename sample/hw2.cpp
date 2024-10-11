@@ -2,7 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-
+#include <mpi.h>
 #include <lodepng.h>
 
 #define GLM_FORCE_SWIZZLE  // vec3.xyz(), vec3.xyx() ...ect, these are called "Swizzle".
