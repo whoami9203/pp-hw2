@@ -1,0 +1,9 @@
+N=3
+n=6
+c=6
+pos=-0.027 -0.097 3.044
+tarpos=0 0 0
+width=512
+height=512
+timelimit=250
+valid=/work/samuel21119/PP24/hw2/testcases/04.png
