@@ -44,7 +44,7 @@ vec3 target_pos;  // target position in 3D space (x, y, z)
 
 unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
-unsigned char* final_image = nullptr;
+unsigned char* final_image;
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
@@ -204,7 +204,8 @@ int main(int argc, char** argv) {
 
         // Fill the sendcounts and displs arrays
         for (int i = 0; i < size; ++i) {
-            sendcounts[i] = rows_per_process * width * 4;  // Number of bytes to receive from each process
+            int rows_for_proc = (i == size - 1) ? rows_per_process + height % size : rows_per_process;
+            sendcounts[i] = rows_for_proc * width * 4;  // Number of bytes to receive from each process
             displs[i] = i * rows_per_process * width * 4;  // Displacement in the final image
         }
     }
@@ -303,6 +304,7 @@ int main(int argc, char** argv) {
     }
     //---
 
+    MPI_Barrier(MPI_COMM_WORLD);  // Synchronize all processes before gathering
     // Each process sends its 'local_raw_image' to the master process
     MPI_Gatherv(image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
