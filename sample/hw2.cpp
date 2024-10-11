@@ -210,6 +210,8 @@ int main(int argc, char** argv) {
         }
     }
 
+    printf("rank: %d, rows: %d\n", rank, rows_per_process);
+
     //---start rendering
     for (int i = start_row; i < end_row; ++i) {
         for (int j = 0; j < width; ++j) {
@@ -303,6 +305,7 @@ int main(int argc, char** argv) {
         }
     }
     //---
+    printf("rank %d finish\n", rank);
 
     MPI_Barrier(MPI_COMM_WORLD);  // Synchronize all processes before gathering
     // Each process sends its 'local_raw_image' to the master process
