@@ -44,10 +44,11 @@ vec3 target_pos;  // target position in 3D space (x, y, z)
 
 unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
+unsigned char* final_image = nullptr;
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
-    unsigned error = lodepng_encode32_file(filename, raw_image, width, height);
+    unsigned error = lodepng_encode32_file(filename, final_image, width, height);
 
     if (error) printf("png error %u: %s\n", error, lodepng_error_text(error));
 }
@@ -153,6 +154,12 @@ int main(int argc, char** argv) {
     // filename: filename
     assert(argc == 11);
 
+    MPI_Init(&argc, &argv);  // Initialize MPI
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Get process ID (rank)
+    MPI_Comm_size(MPI_COMM_WORLD, &size); // Get number of processes
+
     //---init arguments
     num_threads = atoi(argv[1]);
     camera_pos = vec3(atof(argv[2]), atof(argv[3]), atof(argv[4]));
@@ -166,17 +173,45 @@ int main(int argc, char** argv) {
     iResolution = vec2(width, height);
     //---
 
-    //---create image
-    raw_image = new unsigned char[width * height * 4];
-    image = new unsigned char*[height];
+    // Split the work: assign a range of rows to each process
+    int rows_per_process = height / size;
+    int start_row = rank * rows_per_process;    
+    int end_row = (rank == size - 1) ? height : start_row + rows_per_process;
 
-    for (int i = 0; i < height; ++i) {
+    if(rank == size - 1){
+        rows_per_process += height % size;
+    }
+
+    //---create image
+    raw_image = new unsigned char[width * rows_per_process * 4];
+    image = new unsigned char*[rows_per_process];
+
+    for (int i = 0; i < rows_per_process; ++i) {
         image[i] = raw_image + i * width * 4;
     }
     //---
 
+    //--- Gather Results ---//
+    int* sendcounts = nullptr;
+    int* displs = nullptr;
+    if (rank == 0) {
+        // Only on the master process, allocate space for the final image
+        final_image = new unsigned char[width * height * 4];  // Full image size
+
+        // Allocate arrays to store the number of pixels sent by each process and the displacement
+        sendcounts = new int[size];
+        displs = new int[size];
+
+        // Fill the sendcounts and displs arrays
+        for (int i = 0; i < size; ++i) {
+            int rows_for_proc = (i == size - 1) ? rows_per_process + height % size : rows_per_process;
+            sendcounts[i] = rows_for_proc * width * 4;  // Number of bytes to receive from each process
+            displs[i] = i * rows_per_process * width * 4;  // Displacement in the final image
+        }
+    }
+
     //---start rendering
-    for (int i = 0; i < height; ++i) {
+    for (int i = start_row; i < end_row; ++i) {
         for (int j = 0; j < width; ++j) {
             vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
 
@@ -269,8 +304,18 @@ int main(int argc, char** argv) {
     }
     //---
 
+    // Each process sends its 'local_raw_image' to the master process
+    MPI_Gatherv(image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
+                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    //--- Saving Image ---//
+    if (rank == 0) {
+        write_png(argv[10]);  // Write final image on process 0
+        delete[] final_image;
+    }
+
     //---saving image
-    write_png(argv[10]);
+    // write_png(argv[10]);
     //---
 
     //---finalize
