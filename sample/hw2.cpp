@@ -301,7 +301,7 @@ int main(int argc, char** argv) {
 
             current_pixel++;
             // print progress
-            //printf("rendering...%5.2lf%%\r", current_pixel / total_pixel * 100.);
+            printf("rank %d rendering...%5.2lf%%\r", rank, current_pixel / total_pixel * 100.);
         }
     }
     //---
