@@ -210,10 +210,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    //printf("rank: %d, rows: %d\n", rank, rows_per_process);
+    printf("rank: %d, rows: %d\n", rank, rows_per_process);
 
     //---start rendering
-    for (int i = 0; i < rows_per_process; ++i) {
+    for (int i = start_row; i < end_row; ++i) {
         for (int j = 0; j < width; ++j) {
             vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
 
@@ -294,10 +294,10 @@ int main(int argc, char** argv) {
             fcol /= (double)(AA * AA);
             // convert double (0~1) to unsigned char (0~255)
             fcol *= 255.0;
-            image[i][4 * j + 0] = (unsigned char)fcol.r;  // r
-            image[i][4 * j + 1] = (unsigned char)fcol.g;  // g
-            image[i][4 * j + 2] = (unsigned char)fcol.b;  // b
-            image[i][4 * j + 3] = 255;                    // a
+            image[i - start_row][4 * j + 0] = (unsigned char)fcol.r;  // r
+            image[i - start_row][4 * j + 1] = (unsigned char)fcol.g;  // g
+            image[i - start_row][4 * j + 2] = (unsigned char)fcol.b;  // b
+            image[i - start_row][4 * j + 3] = 255;                    // a
 
             current_pixel++;
             // print progress
