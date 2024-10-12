@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
     //printf("rank %d finish\n", rank);
 
     // Each process sends its 'local_raw_image' to the master process
-    MPI_Gatherv(image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
+    MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
     //--- Saving Image ---//
