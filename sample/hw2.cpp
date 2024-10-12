@@ -45,7 +45,7 @@ vec3 target_pos;  // target position in 3D space (x, y, z)
 unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
 unsigned char* final_image;
-vec4** col_table;
+vec3** col_table;
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
@@ -183,9 +183,9 @@ int main(int argc, char** argv) {
         rows_per_process += height % size;
     }
 
-    col_table = (vec4**)malloc(sizeof(vec4*) * (rows_per_process + 2));
+    col_table = (vec3**)malloc(sizeof(vec3*) * (rows_per_process + 2));
     for (int i=0; i<rows_per_process+2; i++){
-        col_table[i] = (vec4*)malloc(sizeof(vec4) * (width + 2));
+        col_table[i] = (vec3*)malloc(sizeof(vec3) * (width + 2));
     }
 
     for (int i = start_row; i < end_row+2; ++i) {
@@ -297,8 +297,8 @@ int main(int argc, char** argv) {
     //---start rendering
     for (int i = 0; i < rows_per_process; ++i) {
         for (int j = 0; j < width; ++j) {
-            vec4 fcol(0.) =
-                    col_table[i][j]   + col_table[i][j+1]
+            vec4 fcol(0.);
+            fcol += col_table[i][j]   + col_table[i][j+1]
                    +col_table[i+1][j] + col_table[i+1][j+1];  // final color (RGBA 0 ~ 1)
 
             // anti aliasing
