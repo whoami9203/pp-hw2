@@ -45,6 +45,7 @@ vec3 target_pos;  // target position in 3D space (x, y, z)
 unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
 unsigned char* final_image;
+vec4** col_table;
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
@@ -182,6 +183,86 @@ int main(int argc, char** argv) {
         rows_per_process += height % size;
     }
 
+    col_table = (vec4**)malloc(sizeof(vec4*) * (rows_per_process + 2));
+    for (int i=0; i<rows_per_process+2; i++){
+        col_table[i] = (vec4*)malloc(sizeof(vec4) * (width + 2));
+    }
+
+    for (int i = start_row; i < end_row+2; ++i) {
+        for (int j = 0; j < width+2; ++j) {
+            //vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
+
+            //vec2 p = vec2(j, i) + vec2(m, n) / (double)AA;
+            vec2 p = vec2(j, i) / (double)AA;
+
+            //---convert screen space coordinate to (-ap~ap, -1~1)
+            // ap = aspect ratio = width/height
+            vec2 uv = (-iResolution.xy() + 2. * p) / iResolution.y;
+            uv.y *= -1;  // flip upside down
+            //---
+
+            //---create camera
+            vec3 ro = camera_pos;               // ray (camera) origin
+            vec3 ta = target_pos;               // target position
+            vec3 cf = glm::normalize(ta - ro);  // forward vector
+            vec3 cs =
+                glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
+            vec3 cu = glm::normalize(glm::cross(cs, cf));          // up vector
+            vec3 rd = glm::normalize(uv.x * cs + uv.y * cu + FOV * cf);  // ray direction
+            //---
+
+            //---marching
+            double trap;  // orbit trap
+            int objID;    // the object id intersected with
+            double d = trace(ro, rd, trap, objID);
+            //---
+
+            //---lighting
+            vec3 col(0.);                          // color
+            vec3 sd = glm::normalize(camera_pos);  // sun direction (directional light)
+            vec3 sc = vec3(1., .9, .717);          // light color
+            //---
+
+            //---coloring
+            if (d < 0.) {        // miss (hit sky)
+                col = vec3(0.);  // sky color (black)
+            } else {
+                vec3 pos = ro + rd * d;              // hit position
+                vec3 nr = calcNor(pos);              // get surface normal
+                vec3 hal = glm::normalize(sd - rd);  // blinn-phong lighting model (vector
+                                                        // h)
+                // for more info:
+                // https://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model
+
+                // use orbit trap to get the color
+                col = pal(trap - .4, vec3(.5), vec3(.5), vec3(1.),
+                    vec3(.0, .1, .2));  // diffuse color
+                vec3 ambc = vec3(0.3);  // ambient color
+                double gloss = 32.;     // specular gloss
+
+                // simple blinn phong lighting model
+                double amb =
+                    (0.7 + 0.3 * nr.y) *
+                    (0.2 + 0.8 * glm::clamp(0.05 * log(trap), 0.0, 1.0));  // self occlution
+                double sdw = softshadow(pos + .001 * nr, sd, 16.);         // shadow
+                double dif = glm::clamp(glm::dot(sd, nr), 0., 1.) * sdw;   // diffuse
+                double spe = glm::pow(glm::clamp(glm::dot(nr, hal), 0., 1.), gloss) *
+                                dif;  // self shadow
+
+                vec3 lin(0.);
+                lin += ambc * (.05 + .95 * amb);  // ambient color * ambient
+                lin += sc * dif * 0.8;            // diffuse * light color * light intensity
+                col *= lin;
+
+                col = glm::pow(col, vec3(.7, .9, 1.));  // fake SSS (subsurface scattering)
+                col += spe * 0.8;                       // specular
+            }
+            //---
+
+            col_table[i - start_row][j] = glm::clamp(glm::pow(col, vec3(.4545)), 0., 1.);  // gamma correction
+        }
+    }
+
     //---create image
     raw_image = new unsigned char[width * rows_per_process * 4];
     image = new unsigned char*[rows_per_process];
@@ -211,97 +292,28 @@ int main(int argc, char** argv) {
     }
 
     printf("rank: %d, rows: %d\n", rank, rows_per_process);
+    double AA2 = (double)(AA * AA);
 
     //---start rendering
-    for (int i = start_row; i < end_row; ++i) {
+    for (int i = 0; i < rows_per_process; ++i) {
         for (int j = 0; j < width; ++j) {
-            vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
+            vec4 fcol(0.) =
+                    col_table[i][j]   + col_table[i][j+1]
+                   +col_table[i+1][j] + col_table[i+1][j+1];  // final color (RGBA 0 ~ 1)
 
             // anti aliasing
-            for (int m = 0; m < AA; ++m) {
-                for (int n = 0; n < AA; ++n) {
-                    vec2 p = vec2(j, i) + vec2(m, n) / (double)AA;
 
-                    //---convert screen space coordinate to (-ap~ap, -1~1)
-                    // ap = aspect ratio = width/height
-                    vec2 uv = (-iResolution.xy() + 2. * p) / iResolution.y;
-                    uv.y *= -1;  // flip upside down
-                    //---
-
-                    //---create camera
-                    vec3 ro = camera_pos;               // ray (camera) origin
-                    vec3 ta = target_pos;               // target position
-                    vec3 cf = glm::normalize(ta - ro);  // forward vector
-                    vec3 cs =
-                        glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
-                    vec3 cu = glm::normalize(glm::cross(cs, cf));          // up vector
-                    vec3 rd = glm::normalize(uv.x * cs + uv.y * cu + FOV * cf);  // ray direction
-                    //---
-
-                    //---marching
-                    double trap;  // orbit trap
-                    int objID;    // the object id intersected with
-                    double d = trace(ro, rd, trap, objID);
-                    //---
-
-                    //---lighting
-                    vec3 col(0.);                          // color
-                    vec3 sd = glm::normalize(camera_pos);  // sun direction (directional light)
-                    vec3 sc = vec3(1., .9, .717);          // light color
-                    //---
-
-                    //---coloring
-                    if (d < 0.) {        // miss (hit sky)
-                        col = vec3(0.);  // sky color (black)
-                    } else {
-                        vec3 pos = ro + rd * d;              // hit position
-                        vec3 nr = calcNor(pos);              // get surface normal
-                        vec3 hal = glm::normalize(sd - rd);  // blinn-phong lighting model (vector
-                                                             // h)
-                        // for more info:
-                        // https://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model
-
-                        // use orbit trap to get the color
-                        col = pal(trap - .4, vec3(.5), vec3(.5), vec3(1.),
-                            vec3(.0, .1, .2));  // diffuse color
-                        vec3 ambc = vec3(0.3);  // ambient color
-                        double gloss = 32.;     // specular gloss
-
-                        // simple blinn phong lighting model
-                        double amb =
-                            (0.7 + 0.3 * nr.y) *
-                            (0.2 + 0.8 * glm::clamp(0.05 * log(trap), 0.0, 1.0));  // self occlution
-                        double sdw = softshadow(pos + .001 * nr, sd, 16.);         // shadow
-                        double dif = glm::clamp(glm::dot(sd, nr), 0., 1.) * sdw;   // diffuse
-                        double spe = glm::pow(glm::clamp(glm::dot(nr, hal), 0., 1.), gloss) *
-                                     dif;  // self shadow
-
-                        vec3 lin(0.);
-                        lin += ambc * (.05 + .95 * amb);  // ambient color * ambient
-                        lin += sc * dif * 0.8;            // diffuse * light color * light intensity
-                        col *= lin;
-
-                        col = glm::pow(col, vec3(.7, .9, 1.));  // fake SSS (subsurface scattering)
-                        col += spe * 0.8;                       // specular
-                    }
-                    //---
-
-                    col = glm::clamp(glm::pow(col, vec3(.4545)), 0., 1.);  // gamma correction
-                    fcol += vec4(col, 1.);
-                }
-            }
-
-            fcol /= (double)(AA * AA);
+            fcol /= AA2;
             // convert double (0~1) to unsigned char (0~255)
             fcol *= 255.0;
-            image[i - start_row][4 * j + 0] = (unsigned char)fcol.r;  // r
-            image[i - start_row][4 * j + 1] = (unsigned char)fcol.g;  // g
-            image[i - start_row][4 * j + 2] = (unsigned char)fcol.b;  // b
-            image[i - start_row][4 * j + 3] = 255;                    // a
+            image[i][4 * j + 0] = (unsigned char)fcol.r;  // r
+            image[i][4 * j + 1] = (unsigned char)fcol.g;  // g
+            image[i][4 * j + 2] = (unsigned char)fcol.b;  // b
+            image[i][4 * j + 3] = 255;                    // a
 
             current_pixel++;
             // print progress
-            printf("rank %d rendering...%5.2lf%%\r", rank, current_pixel / total_pixel * 100.);
+            //printf("rank %d rendering...%5.2lf%%\r", rank, current_pixel / total_pixel * 100.);
         }
     }
     //---
