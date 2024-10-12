@@ -210,10 +210,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    printf("rank: %d, rows: %d\n", rank, rows_per_process);
+    //printf("rank: %d, rows: %d\n", rank, rows_per_process);
 
     //---start rendering
-    for (int i = start_row; i < end_row; ++i) {
+    for (int i = 0; i < rows_per_process; ++i) {
         for (int j = 0; j < width; ++j) {
             vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
 
@@ -305,9 +305,8 @@ int main(int argc, char** argv) {
         }
     }
     //---
-    printf("rank %d finish\n", rank);
+    //printf("rank %d finish\n", rank);
 
-    MPI_Barrier(MPI_COMM_WORLD);  // Synchronize all processes before gathering
     // Each process sends its 'local_raw_image' to the master process
     MPI_Gatherv(image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
