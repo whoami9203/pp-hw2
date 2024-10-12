@@ -297,18 +297,18 @@ int main(int argc, char** argv) {
     //---start rendering
     for (int i = 0; i < rows_per_process; ++i) {
         for (int j = 0; j < width; ++j) {
-            vec4 fcol(0.);
-            fcol += col_table[i][j]   + col_table[i][j+1]
-                   +col_table[i+1][j] + col_table[i+1][j+1];  // final color (RGBA 0 ~ 1)
+            vec3 col = col_table[i][j]   + col_table[i][j+1]
+                      +col_table[i+1][j] + col_table[i+1][j+1];
+            //vec4 fcol = vec4(col, 0);   // final color (RGBA 0 ~ 1)
 
             // anti aliasing
 
-            fcol /= AA2;
+            col /= AA2;
             // convert double (0~1) to unsigned char (0~255)
-            fcol *= 255.0;
-            image[i][4 * j + 0] = (unsigned char)fcol.r;  // r
-            image[i][4 * j + 1] = (unsigned char)fcol.g;  // g
-            image[i][4 * j + 2] = (unsigned char)fcol.b;  // b
+            col *= 255.0;
+            image[i][4 * j + 0] = (unsigned char)col.r;  // r
+            image[i][4 * j + 1] = (unsigned char)col.g;  // g
+            image[i][4 * j + 2] = (unsigned char)col.b;  // b
             image[i][4 * j + 3] = 255;                    // a
 
             current_pixel++;
