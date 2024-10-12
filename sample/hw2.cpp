@@ -190,10 +190,8 @@ int main(int argc, char** argv) {
 
     for (int i = start_row; i < end_row + AA - 1; ++i) {
         for (int j = 0; j < width + AA - 1; ++j) {
-            //vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
-
             //vec2 p = vec2(j, i) + vec2(m, n) / (double)AA;
-            vec2 p = vec2(j, i) / (double)AA;
+            vec2 p = vec2(j, i);
 
             //---convert screen space coordinate to (-ap~ap, -1~1)
             // ap = aspect ratio = width/height
@@ -297,9 +295,8 @@ int main(int argc, char** argv) {
     //---start rendering
     for (int i = 0; i < rows_per_process; ++i) {
         for (int j = 0; j < width; ++j) {
-            vec3 col = col_table[i][j];
-            // vec3 col = col_table[i][j]   + col_table[i][j+1]
-            //           +col_table[i+1][j] + col_table[i+1][j+1];
+            vec3 col = col_table[i][j]   + col_table[i][j+1]
+                      +col_table[i+1][j] + col_table[i+1][j+1];
             //vec4 fcol = vec4(col, 0);   // final color (RGBA 0 ~ 1)
 
             // anti aliasing
