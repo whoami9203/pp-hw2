@@ -183,13 +183,13 @@ int main(int argc, char** argv) {
         rows_per_process += height % size;
     }
 
-    col_table = (vec3**)malloc(sizeof(vec3*) * (rows_per_process + 2));
-    for (int i=0; i<rows_per_process+2; i++){
-        col_table[i] = (vec3*)malloc(sizeof(vec3) * (width + 2));
+    col_table = (vec3**)malloc(sizeof(vec3*) * (rows_per_process + AA - 1));
+    for (int i=0; i<rows_per_process + AA - 1; i++){
+        col_table[i] = (vec3*)malloc(sizeof(vec3) * (width + AA - 1));
     }
 
-    for (int i = start_row; i < end_row+2; ++i) {
-        for (int j = 0; j < width+2; ++j) {
+    for (int i = start_row; i < end_row + AA - 1; ++i) {
+        for (int j = 0; j < width + AA - 1; ++j) {
             //vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
 
             //vec2 p = vec2(j, i) + vec2(m, n) / (double)AA;
