@@ -96,7 +96,7 @@ double map(vec3 p) {
     double dmy;  // dummy
     // int dmy2;    // dummy2
     vec3 rp = vec3(p.x, -p.z, p.y); // rotation matrix, rotate 90 deg (pi/2) along the X-axis
-    return md(rp, &dmy);
+    return md(rp, dmy);
 }
 
 // simple palette function (borrowed from Inigo Quilez)
@@ -244,8 +244,8 @@ int main(int argc, char** argv) {
 
                     //---marching
                     double trap;  // orbit trap
-                    int objID;    // the object id intersected with
-                    double d = trace(ro, rd, trap, objID);
+                    // int objID;    // the object id intersected with
+                    double d = trace(ro, rd, trap);
                     //---
 
                     //---lighting
