@@ -81,11 +81,11 @@ double md(vec3 p, double& trap) {
 }
 
 // scene mapping
-double map(vec3 p, double& trap, int& ID) {
-    vec2 rt = vec2(cos(pi / 2.), sin(pi / 2.));
-    vec3 rp = mat3(1., 0., 0., 0., rt.x, -rt.y, 0., rt.y, rt.x) *
-              p;  // rotation matrix, rotate 90 deg (pi/2) along the X-axis
-    ID = 1;
+double map(vec3 p, double& trap) {
+    // vec2 rt = vec2(cos(pi / 2.), sin(pi / 2.));
+    // vec3 rp = mat3(1., 0., 0., 0., rt.x, -rt.y, 0., rt.y, rt.x) *
+    //           p;  // rotation matrix, rotate 90 deg (pi/2) along the X-axis
+    vec3 rp = vec3(p.x, -p.z, p.y);
     return md(rp, trap);
 }
 
@@ -94,8 +94,9 @@ double map(vec3 p, double& trap, int& ID) {
 // normal
 double map(vec3 p) {
     double dmy;  // dummy
-    int dmy2;    // dummy2
-    return map(p, dmy, dmy2);
+    // int dmy2;    // dummy2
+    vec3 rp = vec3(p.x, -p.z, p.y); // rotation matrix, rotate 90 deg (pi/2) along the X-axis
+    return md(rp, &dmy);
 }
 
 // simple palette function (borrowed from Inigo Quilez)
@@ -130,13 +131,12 @@ vec3 calcNor(vec3 p) {
 }
 
 // first march: find object's surface
-double trace(vec3 ro, vec3 rd, double& trap, int& ID) {
+double trace(vec3 ro, vec3 rd, double& trap) {
     double t = 0;    // total distance
     double len = 0;  // current distance
 
     for (int i = 0; i < ray_step; ++i) {
-        len = map(ro + rd * t, trap,
-            ID);  // get minimum distance from current ray position to the object's surface
+        len = map(ro + rd * t, trap);  // get minimum distance from current ray position to the object's surface
         if (glm::abs(len) < eps || t > far_plane) break;
         t += len * ray_multiplier;
     }
