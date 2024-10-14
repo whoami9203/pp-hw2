@@ -213,8 +213,9 @@ int main(int argc, char** argv) {
     //printf("rank: %d, rows: %d\n", rank, rows_per_process);
 
     //---start rendering
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for schedule(dynamic)
     for (int i = start_row; i < end_row; ++i) {
+        #pragma omp simd
         for (int j = 0; j < width; ++j) {
             vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
 
