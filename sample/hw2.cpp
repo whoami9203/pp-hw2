@@ -47,6 +47,11 @@ unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
 unsigned char* final_image;
 int batch_size = 32;
+vec3 ro;    // ray (camera) origin
+vec3 ta;    // target position
+vec3 cf;    // forward vector
+vec3 cs;    // right (side) vector
+vec3 cu;    // up vector
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
@@ -285,12 +290,11 @@ int main(int argc, char** argv) {
     }
 
     //printf("rank: %d, rows: %d\n", rank, rows_per_process);
-    vec3 ro = camera_pos;               // ray (camera) origin
-    vec3 ta = target_pos;               // target position
-    vec3 cf = glm::normalize(ta - ro);  // forward vector
-    vec3 cs =
-        glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
-    vec3 cu = glm::normalize(glm::cross(cs, cf));          // up vector
+    ro = camera_pos;               // ray (camera) origin
+    ta = target_pos;               // target position
+    cf = glm::normalize(ta - ro);  // forward vector
+    cs = glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
+    cu = glm::normalize(glm::cross(cs, cf));          // up vector
 
     auto start = std::chrono::high_resolution_clock::now();
 
