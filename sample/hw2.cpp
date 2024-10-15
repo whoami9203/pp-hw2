@@ -319,7 +319,7 @@ int main(int argc, char** argv) {
                 MPI_Send(&end_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
             }
 
-            int rows_per_process = std::min(batch_size, height - current_row);
+            int rows_per_process = std::min(batch_size, (int)(height) - current_row);
             int start_row = current_row;
             int end_row = current_row + rows_per_process;
             //rows_remaining -= rows_per_process;
