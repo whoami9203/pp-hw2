@@ -309,9 +309,9 @@ int main(int argc, char** argv) {
                 int start_row = offset;
                 int end_row = offset + rows_per_process;
                 rows_remaining -= rows_per_process;
-                sendcounts[p] = rows_per_process;
+                sendcounts[p] = rows_per_process * width * 4;
                 displs[p] = offset;
-                offset += rows_per_process;
+                offset += sendcounts[p];
 
                 printf("sendcounts[%d]: %d, displs[%d]: %d\n", p, sendcounts[p], p, displs[p]);
 
@@ -323,9 +323,9 @@ int main(int argc, char** argv) {
             int start_row = offset;
             int end_row = offset + rows_per_process;
             rows_remaining -= rows_per_process;
-            sendcounts[0] = rows_per_process;
+            sendcounts[0] = rows_per_process * width * 4;
             displs[0] = offset;
-            offset += rows_per_process;
+            offset += sendcounts[0];
 
             printf("rank: %d, \n", rank, start_row, end_row, rows_remaining);
 
