@@ -306,7 +306,7 @@ int main(int argc, char** argv) {
         if (rank == 0) {
             // Master process: distribute rows_per_process rows to all processes
             for (int p = 1; p < size; ++p) {
-                int rows_per_process = std::min(batch_size, height - current_row);
+                int rows_per_process = std::min(batch_size, (int)(height) - current_row);
                 int start_row = current_row;
                 int end_row = current_row + rows_per_process;
                 //rows_remaining -= rows_per_process;
