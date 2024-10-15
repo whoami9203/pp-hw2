@@ -329,7 +329,7 @@ int main(int argc, char** argv) {
             process_rows(start_row, end_row);
 
             // Gather the results from other processes
-            MPI_Gatherv(raw_image, rows_for_root * width * 4, MPI_UNSIGNED_CHAR,
+            MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
         }else{
             rows_remaining -= (batch_size << 2);
