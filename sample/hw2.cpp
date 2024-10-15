@@ -298,36 +298,35 @@ int main(int argc, char** argv) {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    int rows_remaining = height;
+    //int rows_remaining = height;
     int offset = 0;
+    int current_row = 0;
 
-    while(rows_remaining > 0){
+    while(current_row < height){
         if (rank == 0) {
             // Master process: distribute rows_per_process rows to all processes
             for (int p = 1; p < size; ++p) {
-                int rows_per_process = std::min(batch_size, rows_remaining);
-                int start_row = offset;
-                int end_row = offset + rows_per_process;
-                rows_remaining -= rows_per_process;
+                int rows_per_process = std::min(batch_size, height - current_row);
+                int start_row = current_row;
+                int end_row = current_row + rows_per_process;
+                //rows_remaining -= rows_per_process;
+                current_row += rows_per_process;
                 sendcounts[p] = rows_per_process * width * 4;
                 displs[p] = offset;
                 offset += sendcounts[p];
-
-                printf("sendcounts[%d]: %d, displs[%d]: %d\n", p, sendcounts[p], p, displs[p]);
 
                 MPI_Send(&start_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
                 MPI_Send(&end_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
             }
 
-            int rows_per_process = std::min(batch_size, rows_remaining);
-            int start_row = offset;
-            int end_row = offset + rows_per_process;
-            rows_remaining -= rows_per_process;
+            int rows_per_process = std::min(batch_size, height - current_row);
+            int start_row = current_row;
+            int end_row = current_row + rows_per_process;
+            //rows_remaining -= rows_per_process;
+            current_row += rows_per_process;
             sendcounts[0] = rows_per_process * width * 4;
             displs[0] = offset;
             offset += sendcounts[0];
-
-            printf("rank: %d, \n", rank, start_row, end_row, rows_remaining);
 
             // Master does its own work on the batch
             process_rows(start_row, end_row);
@@ -336,12 +335,10 @@ int main(int argc, char** argv) {
             MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
         }else{
-            rows_remaining -= batch_size * size;
+            current_row += batch_size * size;
             int start_row, end_row;
             MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            printf("rank: %d, start row: %d, end row: %d, rows_remaining: %d\n", rank, start_row, end_row, rows_remaining);
 
             process_rows(start_row, end_row);
 
