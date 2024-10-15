@@ -46,6 +46,7 @@ vec3 target_pos;  // target position in 3D space (x, y, z)
 unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
 unsigned char* final_image;
+int batch_size = 32;
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
@@ -146,83 +147,7 @@ double trace(vec3 ro, vec3 rd, double& trap) {
                : -1.;  // if exceeds the far plane then return -1 which means the ray missed a shot
 }
 
-int main(int argc, char** argv) {
-    // ./source [num_threads] [x1] [y1] [z1] [x2] [y2] [z2] [width] [height] [filename]
-    // num_threads: number of threads per process
-    // x1 y1 z1: camera position in 3D space
-    // x2 y2 z2: target position in 3D space
-    // width height: image size
-    // filename: filename
-    assert(argc == 11);
-
-    auto start_all = std::chrono::high_resolution_clock::now();
-
-    MPI_Init(&argc, &argv);  // Initialize MPI
-
-    int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Get process ID (rank)
-    MPI_Comm_size(MPI_COMM_WORLD, &size); // Get number of processes
-
-    //---init arguments
-    num_threads = atoi(argv[1]);
-    camera_pos = vec3(atof(argv[2]), atof(argv[3]), atof(argv[4]));
-    target_pos = vec3(atof(argv[5]), atof(argv[6]), atof(argv[7]));
-    width = atoi(argv[8]);
-    height = atoi(argv[9]);
-
-    double total_pixel = width * height;
-    double current_pixel = 0;
-
-    iResolution = vec2(width, height);
-    //---
-
-    // Split the work: assign a range of rows to each process
-    int rows_per_process = height / size;
-    int start_row = rank * rows_per_process;    
-    int end_row = (rank == size - 1) ? height : start_row + rows_per_process;
-
-    if(rank == size - 1){
-        rows_per_process += height % size;
-    }
-
-    //---create image
-    raw_image = new unsigned char[width * rows_per_process * 4];
-    image = new unsigned char*[rows_per_process];
-
-    for (int i = 0; i < rows_per_process; ++i) {
-        image[i] = raw_image + i * width * 4;
-    }
-    //---
-
-    //--- Gather Results ---//
-    int* sendcounts = nullptr;
-    int* displs = nullptr;
-    if (rank == 0) {
-        // Only on the master process, allocate space for the final image
-        final_image = new unsigned char[width * height * 4];  // Full image size
-
-        // Allocate arrays to store the number of pixels sent by each process and the displacement
-        sendcounts = new int[size];
-        displs = new int[size];
-
-        // Fill the sendcounts and displs arrays
-        for (int i = 0; i < size; ++i) {
-            int rows_for_proc = (i == size - 1) ? rows_per_process + height % size : rows_per_process;
-            sendcounts[i] = rows_for_proc * width * 4;  // Number of bytes to receive from each process
-            displs[i] = i * rows_per_process * width * 4;  // Displacement in the final image
-        }
-    }
-
-    //printf("rank: %d, rows: %d\n", rank, rows_per_process);
-    vec3 ro = camera_pos;               // ray (camera) origin
-    vec3 ta = target_pos;               // target position
-    vec3 cf = glm::normalize(ta - ro);  // forward vector
-    vec3 cs =
-        glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
-    vec3 cu = glm::normalize(glm::cross(cs, cf));          // up vector
-
-    auto start = std::chrono::high_resolution_clock::now();
-
+void process_rows(int start_row, int end_row){
     //---start rendering
     #pragma omp parallel for schedule(dynamic)
     for (int i = start_row; i < end_row; ++i) {
@@ -304,22 +229,121 @@ int main(int argc, char** argv) {
             image[i - start_row][4 * j + 1] = (unsigned char)fcol.g;  // g
             image[i - start_row][4 * j + 2] = (unsigned char)fcol.b;  // b
             image[i - start_row][4 * j + 3] = 255;                    // a
-
-            current_pixel++;
-            // print progress
-            //printf("rank %d rendering...%5.2lf%%\r", rank, current_pixel / total_pixel * 100.);
         }
     }
+}
+
+int main(int argc, char** argv) {
+    // ./source [num_threads] [x1] [y1] [z1] [x2] [y2] [z2] [width] [height] [filename]
+    // num_threads: number of threads per process
+    // x1 y1 z1: camera position in 3D space
+    // x2 y2 z2: target position in 3D space
+    // width height: image size
+    // filename: filename
+    assert(argc == 11);
+
+    auto start_all = std::chrono::high_resolution_clock::now();
+
+    MPI_Init(&argc, &argv);  // Initialize MPI
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Get process ID (rank)
+    MPI_Comm_size(MPI_COMM_WORLD, &size); // Get number of processes
+
+    //---init arguments
+    num_threads = atoi(argv[1]);
+    camera_pos = vec3(atof(argv[2]), atof(argv[3]), atof(argv[4]));
+    target_pos = vec3(atof(argv[5]), atof(argv[6]), atof(argv[7]));
+    width = atoi(argv[8]);
+    height = atoi(argv[9]);
+
+    double total_pixel = width * height;
+    double current_pixel = 0;
+
+    iResolution = vec2(width, height);
     //---
-    //printf("rank %d finish\n", rank);
+
+    //---create image
+    raw_image = new unsigned char[width * batch_size * 4];
+    image = new unsigned char*[batch_size];
+
+    for (int i = 0; i < batch_size; ++i) {
+        image[i] = raw_image + i * width * 4;
+    }
+    //---
+
+    //--- Gather Results ---//
+    int* sendcounts = nullptr;
+    int* displs = nullptr;
+    if (rank == 0) {
+        // Only on the master process, allocate space for the final image
+        final_image = new unsigned char[width * height * 4];  // Full image size
+
+        // Allocate arrays to store the number of pixels sent by each process and the displacement
+        sendcounts = new int[size];
+        displs = new int[size];
+    }
+
+    //printf("rank: %d, rows: %d\n", rank, rows_per_process);
+    vec3 ro = camera_pos;               // ray (camera) origin
+    vec3 ta = target_pos;               // target position
+    vec3 cf = glm::normalize(ta - ro);  // forward vector
+    vec3 cs =
+        glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
+    vec3 cu = glm::normalize(glm::cross(cs, cf));          // up vector
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    int rows_remaining = 0;
+    int offset = 0;
+
+    while(rows_remaining > 0){
+        if (rank == 0) {
+            // Master process: distribute rows_per_process rows to all processes
+            for (int p = 1; p < size; ++p) {
+                int rows_per_process = std::min(batch_size, rows_remaining);
+                int start_row = offset;
+                int end_row = offset + rows_per_process;
+                rows_remaining -= rows_per_process;
+                sendcounts[p-1] = rows_per_process;
+                displs[p-1] = offset;
+                offset += rows_per_process;
+
+                MPI_Send(&start_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
+                MPI_Send(&end_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
+            }
+
+            int rows_per_process = std::min(batch_size, rows_remaining);
+            int start_row = offset;
+            int end_row = offset + rows_per_process;
+            rows_remaining -= rows_per_process;
+            sendcounts[0] = rows_per_process;
+            displs[0] = offset;
+            offset += rows_per_process;
+
+            // Master does its own work on the batch
+            process_rows(start_row, end_row);
+
+            // Gather the results from other processes
+            MPI_Gatherv(raw_image, rows_for_root * width * 4, MPI_UNSIGNED_CHAR,
+                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        }else{
+            rows_remaining -= (batch_size << 2);
+            int start_row, end_row;
+            MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            process_rows(start_row, end_row);
+
+            // Gather the results from other processes
+            MPI_Gatherv(raw_image, (end_row - start_row) * width * 4, MPI_UNSIGNED_CHAR,
+                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        }
+    }
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     std::cout << "rank: " << rank << " Main Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
-
-    // Each process sends its 'local_raw_image' to the master process
-    MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
-                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
     //--- Saving Image ---//
     if (rank == 0) {
