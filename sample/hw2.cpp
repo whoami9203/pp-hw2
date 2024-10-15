@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <mpi.h>
 #include <lodepng.h>
 
@@ -154,6 +155,8 @@ int main(int argc, char** argv) {
     // filename: filename
     assert(argc == 11);
 
+    auto start_all = std::chrono::high_resolution_clock::now();
+
     MPI_Init(&argc, &argv);  // Initialize MPI
 
     int rank, size;
@@ -210,9 +213,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    vec3 col_arr[4][rows_per_process * width];
-    vec2 alias[4] = {vec2(0, 0), vec2(0, 1)/(double)AA, vec2(1, 0)/(double)AA, vec2(1, 1)/(double)AA};
-
     //printf("rank: %d, rows: %d\n", rank, rows_per_process);
     vec3 ro = camera_pos;               // ray (camera) origin
     vec3 ta = target_pos;               // target position
@@ -221,112 +221,95 @@ int main(int argc, char** argv) {
         glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
     vec3 cu = glm::normalize(glm::cross(cs, cf));          // up vector
 
+    auto start = std::chrono::high_resolution_clock::now();
+
     //---start rendering
-    #pragma omp parallel for schedule(static)
-    for (int k = 0; k < 4; ++k) {
+    #pragma omp parallel for schedule(dynamic)
+    for (int i = start_row; i < end_row; ++i) {
+        //#pragma omp simd
+        for (int j = 0; j < width; ++j) {
+            vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
+            
+            // anti aliasing
+            for (int m = 0; m < AA; ++m) {
+                for (int n = 0; n < AA; ++n) {
+                    vec2 p = vec2(j, i) + vec2(m, n) / (double)AA;
 
-        #pragma omp parallel for schedule(dynamic)
-        for (int i = start_row; i < end_row; ++i) {
-            //#pragma omp simd
-            for (int j = 0; j < width; ++j) {
-                vec4 fcol(0.);  // final color (RGBA 0 ~ 1)
-                
-                // anti aliasing
-                for (int m = 0; m < AA; ++m) {
-                    for (int n = 0; n < AA; ++n) {
-                        vec2 p = vec2(j, i) + alias[k];
+                    //---convert screen space coordinate to (-ap~ap, -1~1)
+                    // ap = aspect ratio = width/height
+                    vec2 uv = (-iResolution.xy() + 2. * p) / iResolution.y;
+                    uv.y *= -1;  // flip upside down
+                    //---
+                    
+                    vec3 rd = glm::normalize(uv.x * cs + uv.y * cu + FOV * cf);  // ray direction
+                    //---
 
-                        //---convert screen space coordinate to (-ap~ap, -1~1)
-                        // ap = aspect ratio = width/height
-                        vec2 uv = (-iResolution.xy() + 2. * p) / iResolution.y;
-                        uv.y *= -1;  // flip upside down
-                        //---
-                        
-                        vec3 rd = glm::normalize(uv.x * cs + uv.y * cu + FOV * cf);  // ray direction
-                        //---
+                    //---marching
+                    double trap;  // orbit trap
+                    // int objID;    // the object id intersected with
+                    double d = trace(ro, rd, trap);
+                    //---
 
-                        //---marching
-                        double trap;  // orbit trap
-                        // int objID;    // the object id intersected with
-                        double d = trace(ro, rd, trap);
-                        //---
+                    //---lighting
+                    vec3 col(0.);                          // color
+                    vec3 sd = glm::normalize(camera_pos);  // sun direction (directional light)
+                    vec3 sc = vec3(1., .9, .717);          // light color
+                    //---
 
-                        //---lighting
-                        vec3 col(0.);                          // color
-                        vec3 sd = glm::normalize(camera_pos);  // sun direction (directional light)
-                        vec3 sc = vec3(1., .9, .717);          // light color
-                        //---
+                    //---coloring
+                    if (d < 0.) {        // miss (hit sky)
+                        col = vec3(0.);  // sky color (black)
+                    } else {
+                        vec3 pos = ro + rd * d;              // hit position
+                        vec3 nr = calcNor(pos);              // get surface normal
+                        vec3 hal = glm::normalize(sd - rd);  // blinn-phong lighting model (vector
+                                                             // h)
+                        // for more info:
+                        // https://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model
 
-                        //---coloring
-                        if (d < 0.) {        // miss (hit sky)
-                            col = vec3(0.);  // sky color (black)
-                        } else {
-                            vec3 pos = ro + rd * d;              // hit position
-                            vec3 nr = calcNor(pos);              // get surface normal
-                            vec3 hal = glm::normalize(sd - rd);  // blinn-phong lighting model (vector
-                                                                // h)
-                            // for more info:
-                            // https://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model
+                        // use orbit trap to get the color
+                        col = pal(trap - .4, vec3(.5), vec3(.5), vec3(1.),
+                            vec3(.0, .1, .2));  // diffuse color
+                        vec3 ambc = vec3(0.3);  // ambient color
+                        double gloss = 32.;     // specular gloss
 
-                            // use orbit trap to get the color
-                            col = pal(trap - .4, vec3(.5), vec3(.5), vec3(1.),
-                                vec3(.0, .1, .2));  // diffuse color
-                            vec3 ambc = vec3(0.3);  // ambient color
-                            double gloss = 32.;     // specular gloss
+                        // simple blinn phong lighting model
+                        double amb =
+                            (0.7 + 0.3 * nr.y) *
+                            (0.2 + 0.8 * glm::clamp(0.05 * log(trap), 0.0, 1.0));  // self occlution
+                        double sdw = softshadow(pos + .001 * nr, sd, 16.);         // shadow
+                        double dif = glm::clamp(glm::dot(sd, nr), 0., 1.) * sdw;   // diffuse
+                        double spe = glm::pow(glm::clamp(glm::dot(nr, hal), 0., 1.), gloss) *
+                                     dif;  // self shadow
 
-                            // simple blinn phong lighting model
-                            double amb =
-                                (0.7 + 0.3 * nr.y) *
-                                (0.2 + 0.8 * glm::clamp(0.05 * log(trap), 0.0, 1.0));  // self occlution
-                            double sdw = softshadow(pos + .001 * nr, sd, 16.);         // shadow
-                            double dif = glm::clamp(glm::dot(sd, nr), 0., 1.) * sdw;   // diffuse
-                            double spe = glm::pow(glm::clamp(glm::dot(nr, hal), 0., 1.), gloss) *
-                                        dif;  // self shadow
+                        vec3 lin(0.);
+                        lin += ambc * (.05 + .95 * amb);  // ambient color * ambient
+                        lin += sc * dif * 0.8;            // diffuse * light color * light intensity
+                        col *= lin;
 
-                            vec3 lin(0.);
-                            lin += ambc * (.05 + .95 * amb);  // ambient color * ambient
-                            lin += sc * dif * 0.8;            // diffuse * light color * light intensity
-                            col *= lin;
-
-                            col = glm::pow(col, vec3(.7, .9, 1.));  // fake SSS (subsurface scattering)
-                            col += spe * 0.8;                       // specular
-                        }
-                        //---
-
-                        col_arr[k][(i-start_row)*width + j] = glm::clamp(glm::pow(col, vec3(.4545)), 0., 1.);  // gamma correction
-                        //fcol += vec4(col, 1.);
+                        col = glm::pow(col, vec3(.7, .9, 1.));  // fake SSS (subsurface scattering)
+                        col += spe * 0.8;                       // specular
                     }
+                    //---
+
+                    col = glm::clamp(glm::pow(col, vec3(.4545)), 0., 1.);  // gamma correction
+                    fcol += vec4(col, 1.);
                 }
-                //current_pixel++;
-                // print progress
-                //printf("rank %d rendering...%5.2lf%%\r", rank, current_pixel / total_pixel * 100.);
             }
+
+            fcol /= (double)(AA * AA);
+            // convert double (0~1) to unsigned char (0~255)
+            fcol *= 255.0;
+            image[i - start_row][4 * j + 0] = (unsigned char)fcol.r;  // r
+            image[i - start_row][4 * j + 1] = (unsigned char)fcol.g;  // g
+            image[i - start_row][4 * j + 2] = (unsigned char)fcol.b;  // b
+            image[i - start_row][4 * j + 3] = 255;                    // a
+
+            current_pixel++;
+            // print progress
+            //printf("rank %d rendering...%5.2lf%%\r", rank, current_pixel / total_pixel * 100.);
         }
     }
-
-    for (int i=0; i<rows_per_process; ++i) {
-        #pragma omp simd
-        for (int j=0; j<width; ++j) {
-            vec3 fcol =  col_arr[0][i*width + j]
-                        +col_arr[1][i*width + j]
-                        +col_arr[2][i*width + j]
-                        +col_arr[3][i*width + j];
-            fcol *= (255.0 / (double)(AA * AA));
-            image[i][4 * j + 0] = (unsigned char)fcol.r;  // r
-            image[i][4 * j + 1] = (unsigned char)fcol.g;  // g
-            image[i][4 * j + 2] = (unsigned char)fcol.b;  // b
-            image[i][4 * j + 3] = 255;                    // a
-        }
-    }
-
-    // fcol /= (double)(AA * AA);
-    // // convert double (0~1) to unsigned char (0~255)
-    // fcol *= 255.0;
-    // image[i - start_row][4 * j + 0] = (unsigned char)fcol.r;  // r
-    // image[i - start_row][4 * j + 1] = (unsigned char)fcol.g;  // g
-    // image[i - start_row][4 * j + 2] = (unsigned char)fcol.b;  // b
-    // image[i - start_row][4 * j + 3] = 255;                    // a
-    
     //---
     //printf("rank %d finish\n", rank);
 
@@ -336,8 +319,14 @@ int main(int argc, char** argv) {
 
     //--- Saving Image ---//
     if (rank == 0) {
+        auto end = std::chrono::high_resolution_clock::now();
         write_png(argv[10]);  // Write final image on process 0
         delete[] final_image;
+        auto end_all = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end - start;
+        std::cout << "Main Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
+        elapsed_seconds = end_all - start_all;
+        std::cout << "Total Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
     }
 
     //---saving image
@@ -348,6 +337,8 @@ int main(int argc, char** argv) {
     delete[] raw_image;
     delete[] image;
     //---
+
+    MPI_Finalize();
 
     return 0;
 }
