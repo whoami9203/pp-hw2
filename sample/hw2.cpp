@@ -313,6 +313,8 @@ int main(int argc, char** argv) {
                 displs[p] = offset;
                 offset += rows_per_process;
 
+                printf("sendcounts[%d]: %d, displs[%d]: %d\n", p, sendcounts[p], p, displs[p]);
+
                 MPI_Send(&start_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
                 MPI_Send(&end_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
             }
@@ -325,7 +327,7 @@ int main(int argc, char** argv) {
             displs[0] = offset;
             offset += rows_per_process;
 
-            printf("rank: %d, start row: %d, end row: %d, rows_remaining: %d\n", rank, start_row, end_row, rows_remaining);
+            printf("rank: %d, \n", rank, start_row, end_row, rows_remaining);
 
             // Master does its own work on the batch
             process_rows(start_row, end_row);
