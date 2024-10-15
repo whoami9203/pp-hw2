@@ -313,18 +313,19 @@ int main(int argc, char** argv) {
     //---
     //printf("rank %d finish\n", rank);
 
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end - start;
+    std::cout << "rank: " << rank << " Main Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
+
     // Each process sends its 'local_raw_image' to the master process
     MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
     //--- Saving Image ---//
     if (rank == 0) {
-        auto end = std::chrono::high_resolution_clock::now();
         write_png(argv[10]);  // Write final image on process 0
         delete[] final_image;
         auto end_all = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end - start;
-        std::cout << "Main Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
         elapsed_seconds = end_all - start_all;
         std::cout << "Total Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
     }
