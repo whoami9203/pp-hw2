@@ -304,7 +304,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    #pragma omp parallel for schedule(static)
     for (int i=0; i<rows_per_process; ++i) {
         #pragma omp simd
         for (int j=0; j<width; ++j) {
