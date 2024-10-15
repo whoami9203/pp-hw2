@@ -332,7 +332,7 @@ int main(int argc, char** argv) {
             MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
                 final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
         }else{
-            rows_remaining -= (batch_size << 2);
+            rows_remaining -= batch_size * size;
             int start_row, end_row;
             MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
