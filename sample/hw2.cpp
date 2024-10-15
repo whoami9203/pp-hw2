@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    int rows_remaining = 0;
+    int rows_remaining = height;
     int offset = 0;
 
     while(rows_remaining > 0){
