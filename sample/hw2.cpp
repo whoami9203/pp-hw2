@@ -341,7 +341,7 @@ int main(int argc, char** argv) {
 
             // Gather the results from other processes
             MPI_Gatherv(raw_image, (end_row - start_row) * width * 4, MPI_UNSIGNED_CHAR,
-                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+                nullptr, nullptr, nullptr, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
         }
     }
 
