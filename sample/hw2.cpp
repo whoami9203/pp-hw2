@@ -309,8 +309,8 @@ int main(int argc, char** argv) {
                 int start_row = offset;
                 int end_row = offset + rows_per_process;
                 rows_remaining -= rows_per_process;
-                sendcounts[p-1] = rows_per_process;
-                displs[p-1] = offset;
+                sendcounts[p] = rows_per_process;
+                displs[p] = offset;
                 offset += rows_per_process;
 
                 MPI_Send(&start_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
