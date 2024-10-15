@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <chrono>
+#include <unistd.h>
 #include <mpi.h>
 #include <lodepng.h>
 
@@ -297,6 +298,7 @@ int main(int argc, char** argv) {
     cu = glm::normalize(glm::cross(cs, cf));          // up vector
 
     auto start = std::chrono::high_resolution_clock::now();
+    pid_t pid = getpid();
 
     int rows_remaining = height;
     int offset = 0;
@@ -325,7 +327,7 @@ int main(int argc, char** argv) {
             displs[0] = offset;
             offset += rows_per_process;
 
-            printf("rank: %d, start row: %d, end row: %d\n", rank, start_row, end_row);
+            printf("rank: %d, pid: %d, start row: %d, end row: %d\n", rank, pid, start_row, end_row);
 
             // Master does its own work on the batch
             process_rows(start_row, end_row);
@@ -339,7 +341,7 @@ int main(int argc, char** argv) {
             MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-            printf("rank: %d, start row: %d, end row: %d\n", rank, start_row, end_row);
+            printf("rank: %d, pid: %d, start row: %d, end row: %d\n", rank, pid, start_row, end_row);
 
             process_rows(start_row, end_row);
 
