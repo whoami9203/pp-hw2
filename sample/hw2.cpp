@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
     }
 
     vec3 col_arr[4][rows_per_process * width];
-    vec2 alias[4] = {vec2(0, 0), vec2(0, 1)/(double)AA, vec2(1, 0)/(double)AA, vec2(1, 1)(double)AA};
+    vec2 alias[4] = {vec2(0, 0), vec2(0, 1)/(double)AA, vec2(1, 0)/(double)AA, vec2(1, 1)/(double)AA};
 
     //printf("rank: %d, rows: %d\n", rank, rows_per_process);
     vec3 ro = camera_pos;               // ray (camera) origin
