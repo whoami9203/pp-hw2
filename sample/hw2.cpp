@@ -355,6 +355,7 @@ int main(int argc, char** argv) {
                 // Use MPI_Test to check if the message has arrived
                 MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
 
+                printf("flag: %d\n", flag);
                 // if recv now, then handle it
                 if(flag){
                     printf("rows from rank %d: %d\n", p, rows_per_process);
