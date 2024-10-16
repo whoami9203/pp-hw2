@@ -355,6 +355,7 @@ int main(int argc, char** argv) {
                     continue;
 
                 if(!been_called[p]){
+                    been_called[p] = true;
                     printf("try to recv from rank %d\n", p);
                     MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
                 }
@@ -395,6 +396,7 @@ int main(int argc, char** argv) {
                     continue;
                    
                 if(!been_called[p]){
+                    been_called[p] = true;
                     printf("try to recv from rank %d\n", p);
                     MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
                 }
