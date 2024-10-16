@@ -306,6 +306,7 @@ int main(int argc, char** argv) {
     int current_row = 0;
     int rows_done = 0;
     int row_info[2];
+    bool* pending_proc = new bool[size];
 
     if (rank == 0){
         for (int p = 1; p < size; ++p) {
@@ -321,6 +322,7 @@ int main(int argc, char** argv) {
             if(rows_per_process <= 0)
                 break;
             
+            pending_proc[p] = true;
             printf("sending to rank %d, start_row: %d, rows: %d\n", p, row_info[0], rows_per_process);
             MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
         }
@@ -348,6 +350,9 @@ int main(int argc, char** argv) {
 
             // Check the results from other processes non-blocking
             for (int p = 1; p < size; ++p) {
+                if(!pending_proc[p])
+                    continue;
+
                 printf("before Irecv\n");
                 MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request);
 
@@ -370,8 +375,11 @@ int main(int argc, char** argv) {
                     displs[p] = offset;
                     offset += sendcounts[p];
 
+                    pending_proc[p] = false;
                     if(current_row >= height)
                         break;
+
+                    pending_proc[p] = true;
                     MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
                 }
             }
@@ -379,12 +387,21 @@ int main(int argc, char** argv) {
 
         int sender_rank;
         while(rows_done < height){
-            printf("try to cecv\n");
-            MPI_Recv(&rows_per_process, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &mpi_status);
-            sender_rank = mpi_status.MPI_SOURCE;
-            rows_done += rows_per_process;
-            printf("rows from rank %d: %d\n", sender_rank, rows_per_process);
-            MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            for (int p = 1; p < size; ++p){
+                if(!pending_proc[p])
+                    continue;
+                   
+                printf("try to cecv\n");
+                MPI_IRecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request);
+                MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+
+                if(flag){
+                    rows_done += rows_per_process;
+                    pending_proc[p] = false;
+                    printf("rows from rank %d: %d\n", sender_rank, rows_per_process);
+                    MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                }
+            }
         }
     }
     else
