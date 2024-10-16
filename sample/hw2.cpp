@@ -354,6 +354,7 @@ int main(int argc, char** argv) {
 
                 // if recv now, then handle it
                 if(flag){
+                    printf("rows from rank %d: %d\n", p, rows_per_process);
                     MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     rows_per_process = std::min(batch_size, (int)(height) - current_row);
                     row_info[0] = current_row;
