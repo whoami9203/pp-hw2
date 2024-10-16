@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <chrono>
-#include <iostream>
 #include <mpi.h>
 #include <lodepng.h>
 
@@ -299,139 +298,54 @@ int main(int argc, char** argv) {
     auto start = std::chrono::high_resolution_clock::now();
 
     //int rows_remaining = height;
-    MPI_Request* request = new MPI_Request[size];
-    //MPI_Status* mpi_status = new MPI_Status[size];
-    int flag;  // To check if the message has arrived
-    int rows_per_process;
     int offset = 0;
     int current_row = 0;
-    int rows_done = 0;
-    int row_info[2];
-    bool* pending_proc = new bool[size]();
-    bool* been_called = new bool[size]();
 
-    if (rank == 0){
-        for (int p = 1; p < size; ++p) {
-            rows_per_process = std::min(batch_size, (int)(height) - current_row);
-            row_info[0] = current_row;
-            row_info[1] = current_row + rows_per_process;
+    if (rank == 0) {
+        while(current_row < height){
+            // Master process: distribute rows_per_process rows to all processes
+            for (int p = 1; p < size; ++p) {
+                int rows_per_process = std::min(batch_size, (int)(height) - current_row);
+                int start_row = current_row;
+                int end_row = current_row + rows_per_process;
+                //rows_remaining -= rows_per_process;
+                current_row += rows_per_process;
+                sendcounts[p] = rows_per_process * width * 4;
+                displs[p] = offset;
+                offset += sendcounts[p];
 
+                MPI_Send(&start_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
+                MPI_Send(&end_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
+            }
+
+            int rows_per_process = std::min(batch_size, (int)(height) - current_row);
+            int start_row = current_row;
+            int end_row = current_row + rows_per_process;
+            //rows_remaining -= rows_per_process;
             current_row += rows_per_process;
-            sendcounts[p] = rows_per_process * width * 4;
-            displs[p] = offset;
-            offset += sendcounts[p];
-
-            if(rows_per_process <= 0)
-                break;
-            
-            pending_proc[p] = true;
-            printf("sending to rank %d, start_row: %d, rows: %d\n", p, row_info[0], rows_per_process);
-            MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
-        }
-
-        while (current_row < height){
-            rows_per_process = std::min(batch_size, (int)(height) - current_row);
-            row_info[0] = current_row;
-            row_info[1] = current_row + rows_per_process;
-
-            current_row += rows_per_process;
-            rows_done += rows_per_process;
             sendcounts[0] = rows_per_process * width * 4;
             displs[0] = offset;
             offset += sendcounts[0];
 
-            // map image to final image
-            int index = 0;
-            for(int i=row_info[0]; i<row_info[1]; ++i){
-                image[index++] = final_image + i * width * 4;
-            }
-
             // Master does its own work on the batch
-            printf("rank: %d, start_row: %d, rows: %d\n", rank, row_info[0], rows_per_process);
-            process_rows(row_info[0], row_info[1]);
+            process_rows(start_row, end_row);
 
-            // Check the results from other processes non-blocking
-            for (int p = 1; p < size; ++p) {
-                if(!pending_proc[p])
-                    continue;
-
-                if(!been_called[p]){
-                    been_called[p] = true;
-                    printf("try to recv from rank %d\n", p);
-                    MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
-                }
-
-                printf("before Test\n");
-                // Use MPI_Test to check if the message has arrived
-                MPI_Test(&request[p], &flag, MPI_STATUS_IGNORE);
-
-                printf("flag: %d\n", flag);
-                // if recv now, then handle it
-                if(flag){
-                    printf("rows from rank %d: %d\n", p, rows_per_process);
-                    MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    rows_per_process = std::min(batch_size, (int)(height) - current_row);
-                    row_info[0] = current_row;
-                    row_info[1] = current_row + rows_per_process;
-
-                    current_row += rows_per_process;
-                    rows_done += rows_per_process;
-                    sendcounts[p] = rows_per_process * width * 4;
-                    displs[p] = offset;
-                    offset += sendcounts[p];
-
-                    been_called[p] = false;
-                    pending_proc[p] = false;
-                    if(current_row >= height)
-                        break;
-
-                    pending_proc[p] = true;
-                    MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
-                }
-            }
+            // Gather the results from other processes
+            MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
+                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
         }
-        std::cout << std::flush;
-
-        while(rows_done < height){
-            std::cout << "rows_done: " << rows_done << std::endl;
-            for (int p = 1; p < size; ++p){
-                if(!pending_proc[p])
-                    continue;
-                   
-                if(!been_called[p]){
-                    been_called[p] = true;
-                    printf("try to recv from rank %d\n", p);
-                    std::cout << std::flush;
-                    MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
-                }
-
-                printf("before Test\n");
-                // Use MPI_Test to check if the message has arrived
-                MPI_Test(&request[p], &flag, MPI_STATUS_IGNORE);
-
-                if(flag){
-                    rows_done += rows_per_process;
-                    pending_proc[p] = false;
-                    been_called[p] = false;
-                    printf("rows from rank %d: %d\n", p, rows_per_process);
-                    MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                }
-            }
-        }
-    }
-    else
-    {
-        while (current_row < height){
+    }else{
+        while(current_row < height){
             current_row += batch_size * size;
-            MPI_Recv(row_info, 2, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            int start_row, end_row;
+            MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-            rows_per_process = row_info[1] - row_info[0];
-            printf("rank: %d, start_row: %d, rows: %d\n", rank, row_info[0], rows_per_process);
-            process_rows(row_info[0], row_info[1]);
+            process_rows(start_row, end_row);
 
-            // Send the results to master processes
-            MPI_Send(&rows_per_process, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
-            MPI_Send(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD);
+            // Gather the results from other processes
+            MPI_Gatherv(raw_image, (end_row - start_row) * width * 4, MPI_UNSIGNED_CHAR,
+                nullptr, nullptr, nullptr, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
         }
     }
 
