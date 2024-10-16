@@ -55,14 +55,9 @@ vec3 cu;    // up vector
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
-    LodePNGState state;
-    lodepng_state_init(&state);
-    state.encoder.filter_strategy = LFS_ZERO;
-    unsigned error = lodepng_encode32(filename, final_image, final_image, width, height, &state);
+    unsigned error = lodepng_encode32_file(filename, final_image, final_image, width, height);
 
     if (error) printf("png error %u: %s\n", error, lodepng_error_text(error));
-
-    lodepng_state_cleanup(&state);
 }
 
 // mandelbulb distance function (DE)
