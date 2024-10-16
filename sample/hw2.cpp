@@ -340,6 +340,7 @@ int main(int argc, char** argv) {
             }
 
             // Master does its own work on the batch
+            printf("rank: %d, start_row: %d, rows: %d\n", rank, row_info[0], rows_per_process);
             process_rows(row_info[0], row_info[1]);
 
             // Check the results from other processes non-blocking
@@ -384,6 +385,7 @@ int main(int argc, char** argv) {
             MPI_Recv(row_info, 2, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
             rows_per_process = row_info[1] - row_info[0];
+            printf("rank: %d, start_row: %d, rows: %d\n", rank, row_info[0], rows_per_process);
             process_rows(row_info[0], row_info[1]);
 
             // Send the results to master processes
