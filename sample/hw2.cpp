@@ -319,6 +319,8 @@ int main(int argc, char** argv) {
 
             if(rows_per_process <= 0)
                 break;
+            
+            printf("sending to rank %d, start_row: %d, rows: %d\n", p, row_info[0], rows_per_process);
             MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
         }
 
