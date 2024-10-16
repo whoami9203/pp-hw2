@@ -306,8 +306,8 @@ int main(int argc, char** argv) {
     int current_row = 0;
     int rows_done = 0;
     int row_info[2];
-    bool* pending_proc = new bool[size];
-    bool* been_called = new bool[size];
+    bool* pending_proc = new bool[size]();
+    bool* been_called = new bool[size]();
 
     if (rank == 0){
         for (int p = 1; p < size; ++p) {
