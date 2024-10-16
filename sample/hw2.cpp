@@ -154,7 +154,7 @@ double trace(vec3 ro, vec3 rd, double& trap) {
 
 void process_rows(int start_row, int end_row){
     //---start rendering
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(dynamic)
     for (int i = start_row; i < end_row; ++i) {
         //#pragma omp simd
         for (int j = 0; j < width; ++j) {
@@ -298,52 +298,97 @@ int main(int argc, char** argv) {
     auto start = std::chrono::high_resolution_clock::now();
 
     //int rows_remaining = height;
+    MPI_Request request;
+    MPI_Status mpi_status;
+    int flag;  // To check if the message has arrived
+    int rows_per_process;
     int offset = 0;
     int current_row = 0;
+    int rows_done = 0;
+    int row_info[2];
 
-    while(current_row < height){
-        if (rank == 0) {
-            // Master process: distribute rows_per_process rows to all processes
-            for (int p = 1; p < size; ++p) {
-                int rows_per_process = std::min(batch_size, (int)(height) - current_row);
-                int start_row = current_row;
-                int end_row = current_row + rows_per_process;
-                //rows_remaining -= rows_per_process;
-                current_row += rows_per_process;
-                sendcounts[p] = rows_per_process * width * 4;
-                displs[p] = offset;
-                offset += sendcounts[p];
-
-                MPI_Send(&start_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
-                MPI_Send(&end_row, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
-            }
-
-            int rows_per_process = std::min(batch_size, (int)(height) - current_row);
-            int start_row = current_row;
-            int end_row = current_row + rows_per_process;
-            //rows_remaining -= rows_per_process;
+    if (rank == 0){
+        for (int p = 1; p < size; ++p) {
+            rows_per_process = std::min(batch_size, (int)(height) - current_row);
+            row_info[0] = current_row;
+            row_info[1] = current_row + rows_per_process;
             current_row += rows_per_process;
+            sendcounts[p] = rows_per_process * width * 4;
+            displs[p] = offset;
+            offset += sendcounts[p];
+
+            if(rows_per_process <= 0)
+                break;
+            MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
+        }
+
+        while (current_row < height){
+            rows_per_process = std::min(batch_size << 1, (int)(height) - current_row);
+            row_info[0] = current_row;
+            row_info[1] = current_row + rows_per_process;
+
+            current_row += rows_per_process;
+            rows_done += rows_per_process;
             sendcounts[0] = rows_per_process * width * 4;
             displs[0] = offset;
             offset += sendcounts[0];
 
+            // map image to final image
+            int index = 0;
+            for(int i=row_info[0]; i<row_info[1]; ++i){
+                image[index++] = final_image + i * width * 4;
+            }
+
             // Master does its own work on the batch
-            process_rows(start_row, end_row);
+            process_rows(row_info[0], row_info[1]);
 
-            // Gather the results from other processes
-            MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
-                final_image, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-        }else{
+            // Check the results from other processes non-blocking
+            for (int p = 1; p < size; ++p) {
+                MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request);
+
+                // Use MPI_Test to check if the message has arrived
+                MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+
+                // if recv now, then handle it
+                if(flag){
+                    MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD);
+                    rows_per_process = std::min(batch_size, (int)(height) - current_row);
+                    row_info[0] = current_row;
+                    row_info[1] = current_row + rows_per_process;
+
+                    current_row += rows_per_process;
+                    rows_done += rows_per_process;
+                    sendcounts[p] = rows_per_process * width * 4;
+                    displs[p] = offset;
+                    offset += sendcounts[p];
+
+                    if(current_row >= height)
+                        break;
+                    MPI_Send(row_info, 2, MPI_INT, p, 0, MPI_COMM_WORLD);
+                }
+            }
+        }
+
+        int sender_rank;
+        while(rows_done < height){
+            MPI_Recv(&rows_per_process, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &mpi_status);
+            sender_rank = mpi_status.MPI_SOURCE;
+            rows_done += rows_per_process;
+            MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD);
+        }
+    }
+    else
+    {
+        while (current_row < height){
             current_row += batch_size * size;
-            int start_row, end_row;
-            MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(row_info, 2, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-            process_rows(start_row, end_row);
+            rows_per_process = row_info[1] - row_info[0];
+            process_rows(row_info[0], row_info[1]);
 
-            // Gather the results from other processes
-            MPI_Gatherv(raw_image, (end_row - start_row) * width * 4, MPI_UNSIGNED_CHAR,
-                nullptr, nullptr, nullptr, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+            // Send the results to master processes
+            MPI_Send(&rows_per_process, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+            MPI_Send(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD);
         }
     }
 
