@@ -383,7 +383,7 @@ int main(int argc, char** argv) {
             MPI_Recv(&rows_per_process, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &mpi_status);
             sender_rank = mpi_status.MPI_SOURCE;
             rows_done += rows_per_process;
-            printf("rows from rank %d: %d\n", p, rows_per_process);
+            printf("rows from rank %d: %d\n", sender_rank, rows_per_process);
             MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     }
