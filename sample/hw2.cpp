@@ -248,6 +248,7 @@ int main(int argc, char** argv) {
     assert(argc == 11);
 
     auto start_all = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> render_seconds = start_all - start_all;
 
     MPI_Init(&argc, &argv);  // Initialize MPI
 
@@ -295,7 +296,7 @@ int main(int argc, char** argv) {
     cs = glm::normalize(glm::cross(cf, vec3(0., 1., 0.)));  // right (side) vector
     cu = glm::normalize(glm::cross(cs, cf));          // up vector
 
-    auto start = std::chrono::high_resolution_clock::now();
+    //auto start = std::chrono::high_resolution_clock::now();
 
     //int rows_remaining = height;
     int offset = 0;
@@ -328,7 +329,10 @@ int main(int argc, char** argv) {
             offset += sendcounts[0];
 
             // Master does its own work on the batch
+            auto start_render = std::chrono::high_resolution_clock::now();
             process_rows(start_row, end_row);
+            auto end_render = std::chrono::high_resolution_clock::now();
+            render_seconds += start_render - end_render;
 
             // Gather the results from other processes
             MPI_Gatherv(raw_image, rows_per_process * width * 4, MPI_UNSIGNED_CHAR,
@@ -341,7 +345,10 @@ int main(int argc, char** argv) {
             MPI_Recv(&start_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(&end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
+            auto start_render = std::chrono::high_resolution_clock::now();
             process_rows(start_row, end_row);
+            auto end_render = std::chrono::high_resolution_clock::now();
+            render_seconds += start_render - end_render;
 
             // Gather the results from other processes
             MPI_Gatherv(raw_image, (end_row - start_row) * width * 4, MPI_UNSIGNED_CHAR,
@@ -349,17 +356,15 @@ int main(int argc, char** argv) {
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    std::cout << "rank: " << rank << " Main Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
+    std::cout << "rank: " << rank << " Rendering Time: " << render_seconds.count() << " s" << std::endl;
 
     //--- Saving Image ---//
     if (rank == 0) {
         write_png(argv[10]);  // Write final image on process 0
         delete[] final_image;
         auto end_all = std::chrono::high_resolution_clock::now();
-        elapsed_seconds = end_all - start_all;
-        std::cout << "Total Program Time: " << elapsed_seconds.count() * 1000.0 << " ms" << std::endl;
+        std::chrono::duration<double> elapsed_seconds = end_all - start_all;
+        std::cout << "Total Program Time: " << elapsed_seconds.count() << " s" << std::endl;
     }
 
     //---saving image
