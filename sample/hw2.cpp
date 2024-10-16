@@ -312,6 +312,7 @@ int main(int argc, char** argv) {
             rows_per_process = std::min(batch_size, (int)(height) - current_row);
             row_info[0] = current_row;
             row_info[1] = current_row + rows_per_process;
+
             current_row += rows_per_process;
             sendcounts[p] = rows_per_process * width * 4;
             displs[p] = offset;
@@ -325,7 +326,7 @@ int main(int argc, char** argv) {
         }
 
         while (current_row < height){
-            rows_per_process = std::min(batch_size << 1, (int)(height) - current_row);
+            rows_per_process = std::min(batch_size, (int)(height) - current_row);
             row_info[0] = current_row;
             row_info[1] = current_row + rows_per_process;
 
