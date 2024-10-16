@@ -347,8 +347,10 @@ int main(int argc, char** argv) {
 
             // Check the results from other processes non-blocking
             for (int p = 1; p < size; ++p) {
+                printf("before Irecv\n");
                 MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request);
 
+                printf("before Test\n");
                 // Use MPI_Test to check if the message has arrived
                 MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
 
