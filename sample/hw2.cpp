@@ -298,8 +298,8 @@ int main(int argc, char** argv) {
     auto start = std::chrono::high_resolution_clock::now();
 
     //int rows_remaining = height;
-    MPI_Request request;
-    MPI_Status mpi_status;
+    MPI_Request* request = new MPI_Request[size];
+    //MPI_Status* mpi_status = new MPI_Status[size];
     int flag;  // To check if the message has arrived
     int rows_per_process;
     int offset = 0;
@@ -307,6 +307,7 @@ int main(int argc, char** argv) {
     int rows_done = 0;
     int row_info[2];
     bool* pending_proc = new bool[size];
+    bool* been_called = new bool[size];
 
     if (rank == 0){
         for (int p = 1; p < size; ++p) {
@@ -353,12 +354,14 @@ int main(int argc, char** argv) {
                 if(!pending_proc[p])
                     continue;
 
-                printf("before Irecv\n");
-                MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request);
+                if(!been_called[p]){
+                    printf("try to recv from rank %d\n", p);
+                    MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
+                }
 
                 printf("before Test\n");
                 // Use MPI_Test to check if the message has arrived
-                MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+                MPI_Test(&request[p], &flag, MPI_STATUS_IGNORE);
 
                 printf("flag: %d\n", flag);
                 // if recv now, then handle it
@@ -375,6 +378,7 @@ int main(int argc, char** argv) {
                     displs[p] = offset;
                     offset += sendcounts[p];
 
+                    been_called[p] = false;
                     pending_proc[p] = false;
                     if(current_row >= height)
                         break;
@@ -391,9 +395,14 @@ int main(int argc, char** argv) {
                 if(!pending_proc[p])
                     continue;
                    
-                printf("try to cecv\n");
-                MPI_IRecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request);
-                MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+                if(!been_called[p]){
+                    printf("try to recv from rank %d\n", p);
+                    MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
+                }
+
+                printf("before Test\n");
+                // Use MPI_Test to check if the message has arrived
+                MPI_Test(&request[p], &flag, MPI_STATUS_IGNORE);
 
                 if(flag){
                     rows_done += rows_per_process;
