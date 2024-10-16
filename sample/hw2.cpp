@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
 
                 // if recv now, then handle it
                 if(flag){
-                    MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD);
+                    MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     rows_per_process = std::min(batch_size, (int)(height) - current_row);
                     row_info[0] = current_row;
                     row_info[1] = current_row + rows_per_process;
@@ -374,7 +374,7 @@ int main(int argc, char** argv) {
             MPI_Recv(&rows_per_process, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &mpi_status);
             sender_rank = mpi_status.MPI_SOURCE;
             rows_done += rows_per_process;
-            MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD);
+            MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     }
     else
