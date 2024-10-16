@@ -154,7 +154,7 @@ double trace(vec3 ro, vec3 rd, double& trap) {
 
 void process_rows(int start_row, int end_row){
     //---start rendering
-    #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for schedule(static)
     for (int i = start_row; i < end_row; ++i) {
         //#pragma omp simd
         for (int j = 0; j < width; ++j) {
