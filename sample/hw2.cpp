@@ -46,7 +46,7 @@ vec3 target_pos;  // target position in 3D space (x, y, z)
 unsigned char* raw_image;  // 1D image
 unsigned char** image;     // 2D image
 unsigned char* final_image;
-int batch_size = 32;
+int batch_size = 32Z;
 vec3 ro;    // ray (camera) origin
 vec3 ta;    // target position
 vec3 cf;    // forward vector
@@ -57,8 +57,8 @@ vec3 cu;    // up vector
 void write_png(const char* filename) {
     LodePNGState state;
     lodepng_state_init(&state);
-    state.encoder.zlibsettings.level = 1;  // Lower compression for speed
-    unsigned error = lodepng_encode32(&output, &output_size, final_image, width, height, &state);
+    state.encoder.filter_strategy = LFS_ZERO;
+    unsigned error = lodepng_encode32(filename, final_image, final_image, width, height, &state);
 
     if (error) printf("png error %u: %s\n", error, lodepng_error_text(error));
 
