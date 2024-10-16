@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <chrono>
+#include <iostream>
 #include <mpi.h>
 #include <lodepng.h>
 
@@ -389,8 +390,10 @@ int main(int argc, char** argv) {
                 }
             }
         }
+        std::cout << std::flush;
 
         while(rows_done < height){
+            std::cout << "rows_done: " << rows_done << std::endl;
             for (int p = 1; p < size; ++p){
                 if(!pending_proc[p])
                     continue;
@@ -398,6 +401,7 @@ int main(int argc, char** argv) {
                 if(!been_called[p]){
                     been_called[p] = true;
                     printf("try to recv from rank %d\n", p);
+                    std::cout << std::flush;
                     MPI_Irecv(&rows_per_process, 1, MPI_INT, p, 0, MPI_COMM_WORLD, &request[p]);
                 }
 
