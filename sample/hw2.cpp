@@ -389,7 +389,6 @@ int main(int argc, char** argv) {
             }
         }
 
-        int sender_rank;
         while(rows_done < height){
             for (int p = 1; p < size; ++p){
                 if(!pending_proc[p])
@@ -407,8 +406,9 @@ int main(int argc, char** argv) {
                 if(flag){
                     rows_done += rows_per_process;
                     pending_proc[p] = false;
-                    printf("rows from rank %d: %d\n", sender_rank, rows_per_process);
-                    MPI_Recv(final_image + displs[sender_rank], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, sender_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    been_called[p] = false;
+                    printf("rows from rank %d: %d\n", p, rows_per_process);
+                    MPI_Recv(final_image + displs[p], rows_per_process * width * 4, MPI_UNSIGNED_CHAR, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
             }
         }
