@@ -55,7 +55,7 @@ vec3 cu;    // up vector
 
 // save raw_image to PNG file
 void write_png(const char* filename) {
-    unsigned error = lodepng_encode32_file(filename, final_image, final_image, width, height);
+    unsigned error = lodepng_encode32_file(filename, final_image, width, height);
 
     if (error) printf("png error %u: %s\n", error, lodepng_error_text(error));
 }
